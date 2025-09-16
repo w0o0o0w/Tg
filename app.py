@@ -23,7 +23,7 @@ CACHE_DURATION_MINUTES = 5
 @app.route('/')
 def home():
     """صفحه اصلی برای نمایش پیام خوش‌آمدگویی."""
-    return " به وب‌سرویس قیمت ارز، طلا و سکه خوش آمدید ÐΛɌ₭ᑎΞ𐒡𐒡🗽𓄂𓆃 Tel=@mansor427!"
+    return " به وب‌سرویس قیمت ارز، طلا و سکه خوش آمدید ÐΛɌ₭ᑎΞ𐒡𐒡🗽𓄂𓆃 Tel=@mansor427 | @arzdon !"
 
 @app.route('/all')
 def get_all_data():
