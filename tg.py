@@ -1,6 +1,5 @@
-# tg.py
 # =================================================================
-# 🚀 کد کامل وب‌سرویس TGJU - استخراج ارز، طلا و سکه
+# 🚀 TGJU API - Final Version with English Keys & Formatted Report
 # =================================================================
 import requests
 from bs4 import BeautifulSoup
@@ -8,74 +7,95 @@ import json
 from datetime import datetime
 import re
 
-class TGJUCompleteAPI:
+class TGJUAPI:
     """
-    وب‌سرویس کامل برای استخراج قیمت ارز، طلا و سکه از TGJU.org
-    
-    ویژگی‌ها:
-    ✅ استخراج ۳۴ ارز مختلف (ارزهای اصلی، منطقه‌ای و رمزارزها)
-    ✅ استخراج ۱۵ نوع طلا (طلای خالص، مثقال، صندوق‌های طلا)
-    ✅ استخراج ۱۹ نوع سکه (سکه‌های اصلی و حباب‌ها)
-    ✅ پشتیبانی از JSON export
-    ✅ جستجوی آیتم‌های خاص
-    ✅ خروجی استاندارد با timestamp
+    A comprehensive API for scraping currency, gold, and coin prices from TGJU.org.
+
+    Features:
+    ✅ Scrapes 34 different currencies (major, regional, and cryptocurrencies).
+    ✅ Scrapes 15 types of gold assets.
+    ✅ Scrapes 19 types of coins and their bubbles.
+    ✅ Generates a clean, readable, and sorted report in Markdown format.
+    ✅ Creates a unique English key for each item for easy programmatic access.
+    ✅ Supports JSON export and item searching.
     """
     
     def __init__(self):
         self.base_url = "https://www.tgju.org"
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         })
-    
+
+    def create_english_key(self, name_fa):
+        """
+        Creates a unique, English-friendly key from a Persian name.
+        Example: 'سکه امامی' -> 'coin_emami'
+        """
+        name = name_fa.lower()
+        # A dictionary for common Farsi to English financial terms
+        replacements = {
+            'طلا': 'gold', 'سکه': 'coin', 'حباب': 'bubble', 'دلار': 'dollar', 
+            'یورو': 'euro', 'پوند': 'pound', 'درهم': 'dirham', 'لیر': 'lira', 
+            'یوان': 'yuan', 'ین': 'yen', 'کرون': 'krone', 'دینار': 'dinar', 
+            'روپیه': 'rupee', 'فرانک': 'franc', 'رینگیت': 'ringgit', 
+            'بیت کوین': 'bitcoin', 'لایت کوین': 'litecoin', 'دوج کوین': 'dogecoin',
+            'بایننس': 'binance', 'شیبا': 'shiba', 'تون': 'ton', 'پلاتین': 'platinum',
+            'امامی': 'emami', 'بهار آزادی': 'bahar_azadi', 'ربع': 'rob', 
+            'نیم': 'nim', 'گرمی': 'gerami', 'مثقال': 'mesghal', 'انس': 'ounce',
+            'عیار': 'ayar', 'آبشده': 'abshodeh'
+        }
+        
+        for fa, en in replacements.items():
+            name = name.replace(fa, en)
+        
+        # Remove any remaining non-ASCII characters and clean up
+        name = re.sub(r'[^\x00-\x7F]+', ' ', name) # Remove non-ASCII
+        name = re.sub(r'[^a-z0-9\s-]', '', name) # Remove special chars except space and dash
+        key = re.sub(r'\s+', '_', name.strip()) # Replace spaces with underscores
+        return key if key else 'unknown'
+
     def extract_all_data(self):
-        """استخراج تمام داده‌ها از TGJU"""
+        """Extracts all data from the TGJU homepage."""
         try:
-            response = self.session.get(self.base_url, timeout=15)
+            response = self.session.get(self.base_url, timeout=20)
             response.raise_for_status()
-            
             soup = BeautifulSoup(response.text, 'html.parser')
             
-            # ایجاد دیکشنری‌های نتیجه
-            currencies = {}
-            gold_data = {}
-            coins_data = {}
+            currencies, gold_data, coins_data = {}, {}, {}
             
-            # جستجو در تمام جداول صفحه
-            tables = soup.find_all('table')
-            
-            for table in tables:
-                rows = table.find_all('tr')
-                
-                for row in rows:
+            for table in soup.find_all('table'):
+                for row in table.find_all('tr'):
                     cells = row.find_all(['td', 'th'])
-                    if len(cells) >= 6:
-                        cell_texts = [cell.get_text(strip=True) for cell in cells]
+                    if len(cells) < 6:
+                        continue
+
+                    cell_texts = [cell.get_text(strip=True) for cell in cells]
+                    
+                    if cell_texts[0] and cell_texts[1]:
+                        name_fa = cell_texts[0]
+                        category = self._categorize_item(name_fa)
                         
-                        if cell_texts[0] and cell_texts[1]:
-                            item_name = cell_texts[0]
-                            category = self.categorize_item(item_name)
+                        if category:
+                            key = self.create_english_key(name_fa)
+                            item_data = {
+                                'key': key,
+                                'name_fa': name_fa,
+                                'price': cell_texts[1],
+                                'change': cell_texts[2],
+                                'min_price': cell_texts[3],
+                                'max_price': cell_texts[4],
+                                'time': cell_texts[5],
+                                'timestamp': datetime.now().isoformat(),
+                                'category': category
+                            }
                             
-                            if category:
-                                item_data = {
-                                    'name': item_name,
-                                    'price': cell_texts[1],
-                                    'change': cell_texts[2] if len(cell_texts) > 2 else '',
-                                    'min_price': cell_texts[3] if len(cell_texts) > 3 else '',
-                                    'max_price': cell_texts[4] if len(cell_texts) > 4 else '',
-                                    'time': cell_texts[5] if len(cell_texts) > 5 else '',
-                                    'timestamp': datetime.now().isoformat(),
-                                    'category': category
-                                }
-                                
-                                key = self.create_key(item_name)
-                                
-                                if category == 'currency':
-                                    currencies[key] = item_data
-                                elif category == 'gold':
-                                    gold_data[key] = item_data
-                                elif category == 'coin':
-                                    coins_data[key] = item_data
+                            if category == 'currency':
+                                currencies[key] = item_data
+                            elif category == 'gold':
+                                gold_data[key] = item_data
+                            elif category == 'coin':
+                                coins_data[key] = item_data
             
             return {
                 'status': 'success',
@@ -83,121 +103,81 @@ class TGJUCompleteAPI:
                     'total_currencies': len(currencies),
                     'total_gold': len(gold_data),
                     'total_coins': len(coins_data),
-                    'total_items': len(currencies) + len(gold_data) + len(coins_data)
                 },
-                'data': {
-                    'currencies': currencies,
-                    'gold': gold_data,
-                    'coins': coins_data
-                },
+                'data': {'currencies': currencies, 'gold': gold_data, 'coins': coins_data},
                 'source': 'TGJU.org',
                 'last_updated': datetime.now().isoformat()
             }
-            
         except Exception as e:
-            return {
-                'status': 'error',
-                'message': f'خطا در استخراج: {str(e)}'
-            }
-    
-    def categorize_item(self, item_name):
-        """تشخیص نوع آیتم بر اساس نام"""
+            return {'status': 'error', 'message': f'Extraction failed: {str(e)}'}
+
+    def _categorize_item(self, item_name):
+        """Internal method to categorize an item based on its name."""
         item_lower = item_name.lower()
-        
-        # کلمات کلیدی ارزها
-        currency_keywords = [
-            'دلار', 'یورو', 'پوند', 'درهم', 'یوان', 'ین', 'کرون', 'لیر', 
-            'دینار', 'روپیه', 'فرانک', 'رینگیت', 'بیت کوین', 'لایت کوین',
-            'دوج کوین', 'بایننس', 'شیبا', 'تون', 'پلاتین'
-        ]
-        
-        # کلمات کلیدی طلا
+        currency_keywords = ['دلار', 'یورو', 'پوند', 'درهم', 'یوان', 'ین', 'کرون', 'لیر', 'دینار', 'روپیه', 'فرانک', 'رینگیت', 'بیت کوین', 'لایت کوین', 'دوج کوین', 'بایننس', 'شیبا', 'تون', 'پلاتین']
         gold_keywords = ['طلا', 'gold', 'مثقال', 'انس طلا', 'صندوق طلا']
-        
-        # کلمات کلیدی سکه
         coin_keywords = ['سکه', 'حباب', 'تمام سکه']
         
-        if any(keyword in item_lower for keyword in currency_keywords):
-            return 'currency'
-        elif any(keyword in item_lower for keyword in gold_keywords):
-            return 'gold'
-        elif any(keyword in item_lower for keyword in coin_keywords):
-            return 'coin'
-        
+        if any(keyword in item_lower for keyword in currency_keywords): return 'currency'
+        if any(keyword in item_lower for keyword in gold_keywords): return 'gold'
+        if any(keyword in item_lower for keyword in coin_keywords): return 'coin'
         return None
-    
-    def create_key(self, name):
-        """ایجاد کلید منحصر به فرد از نام فارسی"""
-        key = re.sub(r'[^\w\s]', '', name)
-        key = re.sub(r'\s+', '_', key.strip())
-        return key.lower()
-    
-    def get_currencies_only(self):
-        """فقط ارزها را برگردان"""
-        data = self.extract_all_data()
-        if data['status'] == 'success':
-            return {
-                'status': 'success',
-                'count': data['summary']['total_currencies'],
-                'currencies': data['data']['currencies'],
-                'last_updated': data['last_updated']
-            }
-        return data
-    
-    def get_gold_only(self):
-        """فقط طلا را برگردان"""
-        data = self.extract_all_data()
-        if data['status'] == 'success':
-            return {
-                'status': 'success',
-                'count': data['summary']['total_gold'],
-                'gold': data['data']['gold'],
-                'last_updated': data['last_updated']
-            }
-        return data
-    
-    def get_coins_only(self):
-        """فقط سکه‌ها را برگردان"""
-        data = self.extract_all_data()
-        if data['status'] == 'success':
-            return {
-                'status': 'success',
-                'count': data['summary']['total_coins'],
-                'coins': data['data']['coins'],
-                'last_updated': data['last_updated']
-            }
-        return data
-    
-    def search_item(self, search_term):
-        """جستجوی آیتم خاص"""
-        data = self.extract_all_data()
-        if data['status'] != 'success':
-            return data
-        
-        results = []
-        search_lower = search_term.lower()
-        
-        for category_name, category_data in data['data'].items():
-            for key, item_data in category_data.items():
-                if search_lower in item_data['name'].lower():
-                    results.append({
-                        'category': category_name,
-                        'item': item_data
-                    })
-        
-        return {
-            'status': 'success',
-            'search_term': search_term,
-            'results_count': len(results),
-            'results': results
+
+    def get_formatted_report(self):
+        """Fetches data and generates a clean, sorted report in Markdown format."""
+        all_data = self.extract_all_data()
+        if all_data['status'] != 'success':
+            return f"Error fetching data: {all_data.get('message')}"
+
+        data = all_data['data']
+        report_lines = [f"# Price Report - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", "\n---"]
+
+        categories = {
+            'gold': '🥇 Gold',
+            'coins': '🟡 Coins',
+            'currencies': '💵 Currencies'
         }
-    
-    def export_to_json(self, filename="tgju_data.json"):
-        """صادرات به فایل JSON"""
-        try:
-            data = self.extract_all_data()
-            with open(filename, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-            return {'status': 'success', 'filename': filename}
-        except Exception as e:
-            return {'status': 'error', 'message': str(e)}
+
+        for cat_key, cat_title in categories.items():
+            report_lines.extend([f"## {cat_title}\n", "| Key (English) | نام فارسی (Farsi) | قیمت | تغییرات |", "| :--- | :--- | :--- | :--- |"])
+            
+            items = data.get(cat_key, {})
+            if not items:
+                report_lines.append("| *No data found* | | | |")
+                continue
+
+            sorted_items = sorted(items.values(), key=lambda item: item['name_fa'])
+            
+            for item in sorted_items:
+                if not any(char.isdigit() for char in item.get('price', '')):
+                    continue
+                report_lines.append(f"| `{item['key']}` | {item['name_fa']} | {item['price']} | {item['change']} |")
+            
+            report_lines.append("\n---")
+            
+        return "\n".join(report_lines)
+
+# =================================================================
+# 📖 How to Use:
+# =================================================================
+
+if __name__ == "__main__":
+    # 1. Create an instance of the API
+    api = TGJUAPI()
+
+    # 2. Get the formatted, human-readable report
+    print("-----------[Formatted Report]-----------")
+    formatted_report = api.get_formatted_report()
+    print(formatted_report)
+
+    # 3. Get all data as a JSON-like dictionary
+    print("\n\n-----------[Raw Dictionary Data]-----------")
+    all_data = api.extract_all_data()
+    if all_data['status'] == 'success':
+        # Print the English key and Farsi name for the first gold item
+        first_gold_key = list(all_data['data']['gold'].keys())[0]
+        first_gold_item = all_data['data']['gold'][first_gold_key]
+        print(f"Example Gold Item -> Key: '{first_gold_key}', Name: '{first_gold_item['name_fa']}'")
+        
+        # Print total items found
+        print(f"Summary: {all_data['summary']}")
